@@ -20,6 +20,8 @@ def to_holding_properties(
         "保有名": {"title": [{"text": {"content": holding_name}}]},
         "データソース": {"select": {"name": "SBI_CSV"}},
         "口座": {"select": {"name": row.account}},
+        "資産クラス": {"select": {"name": row.asset_class}},
+        "通貨": {"select": {"name": "JPY"}},
         "保有ステータス": {"status": {"name": "Active"}},
         "基準日": {"date": {"start": reference_date.isoformat()}},
         "最終更新日": {"date": {"start": date.today().isoformat()}},

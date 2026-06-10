@@ -22,6 +22,7 @@ NOTION_DB_INVESTMENT_POLICY: str = os.environ.get("NOTION_DB_INVESTMENT_POLICY",
 NOTION_DB_AGENT: str = os.environ.get("NOTION_DB_AGENT", "")
 NOTION_DB_AGENT_ANALYSIS: str = os.environ.get("NOTION_DB_AGENT_ANALYSIS", "")
 NOTION_DB_WEEKLY_REPORTS: str = os.environ.get("NOTION_DB_WEEKLY_REPORTS", "")
+NOTION_DB_PORTFOLIO_SNAPSHOTS: str = os.environ.get("NOTION_DB_PORTFOLIO_SNAPSHOTS", "")
 
 # --- Claude API ---
 ANTHROPIC_API_KEY: str = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -40,6 +41,7 @@ _DB_NAME_TO_ENV: dict[str, str] = {
     "Agent DB": "NOTION_DB_AGENT",
     "Agent Analysis Results DB": "NOTION_DB_AGENT_ANALYSIS",
     "Weekly Reports DB": "NOTION_DB_WEEKLY_REPORTS",
+    "Portfolio Snapshots DB": "NOTION_DB_PORTFOLIO_SNAPSHOTS",
 }
 
 
