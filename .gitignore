@@ -1,0 +1,17 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# 本物のCSV・個人情報（匿名化サンプルは tests/fixtures/ のみ許可）
+docs/sbi_csv_samples/
+data/
+*.local.csv
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
