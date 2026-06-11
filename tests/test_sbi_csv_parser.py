@@ -45,7 +45,8 @@ def test_parse_fund_row() -> None:
     rows, _ = parse_csv(io.BytesIO(_load_sample()))
     fund = next(r for r in rows if r.asset_class == "投信")
     assert fund.external_id is None
-    assert "全世界株" in fund.name
+    # 全角小文字 ｅ(0x82 0x85) の 0x85 を NEL と誤認して壊さないこと
+    assert fund.name == "ｅＭＡＸＩＳ　Ｓｌｉｍ　全世界株式（オール・カントリー）"
     assert fund.quantity == 1000000.0
     assert fund.cost_price == 15000.0
     assert fund.valuation == 1800000.0

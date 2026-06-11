@@ -207,8 +207,10 @@ def _run_persona(
     print(f"[runner] {name} 実行中... (provider={config.LLM_PROVIDER}, model={config.LLM_MODEL_PERSONA})")
     try:
         resp: LLMResponse = adapter.complete_with_tool(
+            # 思考型モデル（gemini-3.x）は思考トークンも max_tokens に含むため
+            # 関数呼び出しが切れないよう十分大きく取る（思考~2.3k+出力~1k）。
             model=config.LLM_MODEL_PERSONA,
-            max_tokens=1500,
+            max_tokens=5000,
             system=system,
             user_content=portfolio_ctx,
             tool=_PERSONA_TOOL,
@@ -262,8 +264,9 @@ def _run_synthesizer(
     user_content = f"{portfolio_ctx}\n\n{synth_ctx}"
     try:
         resp: LLMResponse = adapter.complete_with_tool(
+            # 議長は入力・出力とも大きく、思考トークンも含むため余裕を持たせる。
             model=config.LLM_MODEL_SYNTHESIZER,
-            max_tokens=3000,
+            max_tokens=10000,
             system=system,
             user_content=user_content,
             tool=_SYNTHESIZER_TOOL,

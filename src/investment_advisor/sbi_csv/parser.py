@@ -38,6 +38,31 @@ _SUBTOTAL_PATTERN = re.compile(r".+合計")
 _NUM_RE = re.compile(r"^[＋+]?([▲△-]?[\d,，\.]+)$")
 
 
+def _decode_with_nel(raw: bytes) -> str:
+    """Shift-JIS(cp932)としてデコードしつつ、NEL(0x85)を改行として扱う。
+
+    0x85 は cp932 2バイト文字の2バイト目にもなり得る（例: 全角小文字 ｅ = 0x82 0x85）。
+    そのため全 0x85 を無条件に置換すると文字を破壊する。リードバイトを認識して
+    2バイト文字を消費し、文字境界に単独で現れた 0x85 のみを改行として扱う。
+    """
+    out = bytearray()
+    i = 0
+    n = len(raw)
+    while i < n:
+        b = raw[i]
+        if b == 0x85:  # 文字境界の単独 0x85 = NEL 改行
+            out.append(0x0A)
+            i += 1
+        elif (0x81 <= b <= 0x9F or 0xE0 <= b <= 0xFC) and i + 1 < n:
+            out.append(b)  # cp932 リードバイト → 次のトレイルバイトごと退避
+            out.append(raw[i + 1])
+            i += 2
+        else:
+            out.append(b)
+            i += 1
+    return bytes(out).decode("cp932", errors="replace")
+
+
 @dataclass
 class SbiRow:
     asset_class: str
@@ -57,10 +82,7 @@ class SbiRow:
 def parse_csv(fp: IO[bytes]) -> tuple[list[SbiRow], list[str]]:
     """CSVファイルオブジェクトをパースし、(行リスト, エラーリスト)を返す。"""
     raw = fp.read()
-    # NEL (0x85バイト) をcp932デコード前にLFに置換する。
-    # 0x85はcp932の先頭バイトになり得るため、デコード後では検出できない。
-    raw = raw.replace(b"\x85", b"\n")
-    text = raw.decode("cp932", errors="replace")
+    text = _decode_with_nel(raw)
 
     all_lines = text.splitlines()
 
@@ -88,8 +110,11 @@ def parse_csv(fp: IO[bytes]) -> tuple[list[SbiRow], list[str]]:
             continue
 
         # セクション見出し検出
-        if line in SECTION_MAP:
-            current_asset_class, current_account = SECTION_MAP[line]
+        # 株式・投信の見出しは `"株式（現物/特定預り）",` のようにクォート＋末尾カンマ付き、
+        # 国内債券のみクォート無しのため、両方を正規化してから照合する。
+        section_key = line.rstrip(",").strip().strip('"')
+        if section_key in SECTION_MAP:
+            current_asset_class, current_account = SECTION_MAP[section_key]
             continue
 
         # 合計行スキップ（直後2行も）
