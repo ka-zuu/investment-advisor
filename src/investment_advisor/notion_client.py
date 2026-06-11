@@ -12,6 +12,21 @@ from investment_advisor import config
 class NotionClient:
     def __init__(self) -> None:
         self._client = Client(auth=config.NOTION_TOKEN)
+        self._db_id_cache: dict[str, str] = {}
+
+    def _resolve_parent_db_id(self, data_source_id: str) -> str:
+        """data_source_id から pages.create に必要な parent.database_id を解決してキャッシュする。
+        notion-client v3 では data_source_id != database_id のため変換が必要。
+        """
+        if data_source_id not in self._db_id_cache:
+            ds = self._client.data_sources.retrieve(data_source_id=data_source_id)
+            parent = ds.get("parent", {})
+            self._db_id_cache[data_source_id] = (
+                parent["database_id"]
+                if parent.get("type") == "database_id"
+                else data_source_id
+            )
+        return self._db_id_cache[data_source_id]
 
     # ------------------------------------------------------------------
     # DB クエリ
@@ -23,16 +38,18 @@ class NotionClient:
         filter: dict[str, Any] | None = None,
         sorts: list[dict[str, Any]] | None = None,
     ) -> list[dict[str, Any]]:
-        """DBの全ページを取得する（ページネーション自動処理）。"""
+        """DBの全ページを取得する（ページネーション自動処理）。
+        notion-client v3 では databases.query が廃止され data_sources.query に移行。
+        """
         results: list[dict[str, Any]] = []
-        kwargs: dict[str, Any] = {"database_id": database_id}
+        kwargs: dict[str, Any] = {"data_source_id": database_id}
         if filter:
             kwargs["filter"] = filter
         if sorts:
             kwargs["sorts"] = sorts
 
         while True:
-            resp = self._client.databases.query(**kwargs)
+            resp = self._client.data_sources.query(**kwargs)
             results.extend(resp["results"])
             if not resp.get("has_more"):
                 break
@@ -65,8 +82,9 @@ class NotionClient:
         properties: dict[str, Any],
         children: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
+        actual_db_id = self._resolve_parent_db_id(parent_database_id)
         kwargs: dict[str, Any] = {
-            "parent": {"database_id": parent_database_id},
+            "parent": {"database_id": actual_db_id},
             "properties": properties,
         }
         if children:
@@ -89,10 +107,12 @@ class NotionClient:
     # ------------------------------------------------------------------
 
     def search_database_id(self, db_name: str) -> str | None:
-        """DB名（部分一致）でDBを検索し、最初にヒットしたDBのIDを返す。"""
+        """DB名（部分一致）でDBを検索し、最初にヒットしたDBのIDを返す。
+        notion-client v3 では filter value が "data_source" に変更。
+        """
         resp = self._client.search(
             query=db_name,
-            filter={"property": "object", "value": "database"},
+            filter={"property": "object", "value": "data_source"},
         )
         for result in resp.get("results", []):
             title_parts = result.get("title", [])
@@ -100,6 +120,23 @@ class NotionClient:
             if db_name in title:
                 return result["id"].replace("-", "")
         return None
+
+    # ------------------------------------------------------------------
+    # ブロック追記
+    # ------------------------------------------------------------------
+
+    def append_block_children(
+        self,
+        block_id: str,
+        children: list[dict[str, Any]],
+    ) -> None:
+        """ページ（ブロック）に子ブロックを追記する。100件超は自動分割。"""
+        batch_size = 100
+        for i in range(0, len(children), batch_size):
+            self._client.blocks.children.append(
+                block_id=block_id,
+                children=children[i : i + batch_size],
+            )
 
     # ------------------------------------------------------------------
     # ファイルダウンロード補助

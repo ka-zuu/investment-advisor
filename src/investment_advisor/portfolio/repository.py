@@ -42,7 +42,9 @@ def aggregate(holdings: list[dict[str, Any]]) -> PortfolioSummary:
 
 
 def load_latest_snapshot_before(client: NotionClient, before_date: date) -> float | None:
-    """Portfolio Snapshots DB から指定日より前の最新スナップショットの総資産額を返す。"""
+    """Portfolio Snapshots DB から指定日より前の最新スナップショットの総資産額を返す。P1: DB未設定時はNoneを返す。"""
+    if not config.NOTION_DB_PORTFOLIO_SNAPSHOTS:
+        return None
     pages = client.query_database(
         config.NOTION_DB_PORTFOLIO_SNAPSHOTS,
         filter={"property": "日付", "date": {"before": before_date.isoformat()}},
@@ -54,7 +56,9 @@ def load_latest_snapshot_before(client: NotionClient, before_date: date) -> floa
 
 
 def load_year_start_snapshot(client: NotionClient, year: int) -> float | None:
-    """Portfolio Snapshots DB から指定年の最初のスナップショットの総資産額を返す。"""
+    """Portfolio Snapshots DB から指定年の最初のスナップショットの総資産額を返す。P1: DB未設定時はNoneを返す。"""
+    if not config.NOTION_DB_PORTFOLIO_SNAPSHOTS:
+        return None
     pages = client.query_database(
         config.NOTION_DB_PORTFOLIO_SNAPSHOTS,
         filter={

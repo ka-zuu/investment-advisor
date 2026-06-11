@@ -24,10 +24,18 @@ NOTION_DB_AGENT_ANALYSIS: str = os.environ.get("NOTION_DB_AGENT_ANALYSIS", "")
 NOTION_DB_WEEKLY_REPORTS: str = os.environ.get("NOTION_DB_WEEKLY_REPORTS", "")
 NOTION_DB_PORTFOLIO_SNAPSHOTS: str = os.environ.get("NOTION_DB_PORTFOLIO_SNAPSHOTS", "")
 
-# --- Claude API ---
+# --- LLM設定（Provider / Modelは切り替え可能。初期候補: gemini）---
+LLM_PROVIDER: str = os.environ.get("LLM_PROVIDER", "gemini")
+GOOGLE_API_KEY: str = os.environ.get("GOOGLE_API_KEY", "")
+LLM_MODEL_PERSONA: str = os.environ.get("LLM_MODEL_PERSONA", "gemini-2.0-flash")
+LLM_MODEL_SYNTHESIZER: str = os.environ.get("LLM_MODEL_SYNTHESIZER", "gemini-2.5-pro")
+
+# Claude API（LLM_PROVIDER=claude の場合に使用）
 ANTHROPIC_API_KEY: str = os.environ.get("ANTHROPIC_API_KEY", "")
-MODEL_PERSONA: str = os.environ.get("MODEL_PERSONA", "claude-sonnet-4-6")
-MODEL_SYNTHESIZER: str = os.environ.get("MODEL_SYNTHESIZER", "claude-opus-4-8")
+
+# 後方互換エイリアス（旧 MODEL_PERSONA / MODEL_SYNTHESIZER を参照しているコードのため）
+MODEL_PERSONA: str = os.environ.get("MODEL_PERSONA", LLM_MODEL_PERSONA)
+MODEL_SYNTHESIZER: str = os.environ.get("MODEL_SYNTHESIZER", LLM_MODEL_SYNTHESIZER)
 
 # --- 実行設定 ---
 TIMEZONE: str = os.environ.get("TIMEZONE", "Asia/Tokyo")

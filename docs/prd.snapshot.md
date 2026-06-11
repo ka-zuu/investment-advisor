@@ -1,4 +1,4 @@
-# PRD Snapshot — 2026-06-10
+# PRD Snapshot — 2026-06-11
 Source: https://app.notion.com/p/82b66f3dc7ab466cb2aae8a4e924171a
 
 > このページは、個人用AI投資アドバイザーの最新PRDです。NotionをSingle Source of Truthとし、Claude Codeはこのページを参照して実装します。
@@ -67,7 +67,7 @@ Ubuntu Home Server
 ├─ SBI CSV parser
 ├─ Portfolio updater
 ├─ News collector
-├─ Claude API / Claude Code integration
+├─ LLM API adapter (Gemini / Claude 等)
 └─ Weekly report generator
 
 Git Repository
@@ -82,7 +82,7 @@ Git Repository
 - 定期実行：cron または systemd timer
 - メイン言語：Python
 - データ管理：Notion
-- AI分析：Claude API またはClaude Code/Cowork相当の実行環境
+- AI分析：Gemini APIを第一候補とするLLM API（Provider / Modelは設定で切り替え可能）
 
 ## 6. Priority Definitions
 | 優先度 | 意味 |
@@ -387,7 +387,7 @@ AIエージェントの役割・制約・プロンプトを管理するDB。
 - すべてのエージェント出力に根拠・不確実性・反対意見を含める
 - 投資判断を断定しない。最終判断はユーザーが行う前提で書く
 - 議長（Synthesizer）は他4体の出力を入力とした2段階目で実行する
-- モデル割り当て：個別ペルソナ4体はSonnet、議長はOpus（§17 Decisions参照）
+- モデル割り当て：Provider / Modelは設定で切り替え可能にする。初期候補はGeminiとし、個別ペルソナ4体は低〜中コストの高性能モデル、議長は高品質モデルを使う（§17 Decisions参照）
 
 ## 11. Weekly Report Specification
 週次レポートはNotionページとして作成する。
@@ -550,10 +550,12 @@ Claude Codeへの基本指示：
 
 ## 17. Decisions
 - Notion PRDを最新の正本とする
-- AI実行形態はClaude API / SDK直叩きとする
-- Claude APIは、Claude.aiの月額サブスク枠とは別課金であり、Claude ConsoleのAPIクレジットを使用する
-- 本番週次バッチでは、個別ペルソナ4体はSonnet、議長(Synthesizer)はOpusを使う
-- コスト管理のため、モデル・最大トークン数・実行回数・概算利用料を実行ログに記録する
+- AI実行形態は外部LLM API / SDK直叩きとし、Provider / Modelは設定で切り替え可能にする
+- 初期実装ではGemini APIを第一候補とする。Claude / OpenAI / OSS系API等は比較・代替候補として扱う
+- 本番週次バッチでは、個別ペルソナ4体は低〜中コストの高性能モデル、議長(Synthesizer)は高品質モデルを使う。初期候補はGemini系モデルとする
+- 議長(Synthesizer)はレポート全体の品質を左右するため、コストよりも統合力・日本語の読みやすさ・断定しすぎない表現を優先してモデルを選ぶ
+- モデル品質検証として、必要に応じてGemini版 / Claude版などのサンプル週次レポートを比較し、読み物としての面白さ・安全性・根拠提示・コストを評価する
+- コスト管理のため、Provider・モデル・最大トークン数・実行回数・概算利用料を実行ログに記録する
 - 実装時にはPRDスナップショットをGitに保存する
 - SBI証券CSVはNotionのFilesプロパティに添付して取り込む
 - SBI以外の資産は手動入力で管理する
@@ -571,7 +573,7 @@ Claude Codeへの基本指示：
 - 答え合わせ（過去レポート参照）を実装し、「1週間前」「1か月前」の2段階でさかのぼる（§11 / §12）
 - 「読み物として楽しめること」を正式ゴールに昇格させる。安全ルール（断定禁止等）は維持しつつ、最終判断は読者が行う前提のもとで読み物としての面白さを重視してよい
 - 投機枠の上限は総資産の5%とする（§10.4）
-- エージェント別モデルは、個別ペルソナ4体をSonnet、議長(Synthesizer)をOpusとする（§10.6）
+- エージェント別モデルは固定せず、Provider / Modelを設定で切り替え可能にする。初期候補はGeminiとし、個別ペルソナ4体は低〜中コストの高性能モデル、議長(Synthesizer)は高品質モデルを使う
 - ニュース収集の初期ソースは、保有銘柄関連ニュースをGoogle News RSS、日本株の公式開示をTDnet、米国マクロ指標をFREDとする（§9.8）
 - CoinGeckoは暗号資産をほぼ保有していないため、P0/P1初期実装から除外する。暗号資産の保有比率が上がった場合に再検討する（§9.8）
 - NewsAPI / GNews / EDINET / SEC EDGARは、初期実装後の段階導入候補とする（§9.8）
@@ -589,4 +591,4 @@ Claude Codeへの基本指示：
 | 2026-06-10 | 第7版。AI実行形態をClaude API / SDK直叩きに確定。Claude APIは、Claude.aiサブスクとは別課金のAPIクレジットを使用し、本番週次バッチでは個別ペルソナ4体をSonnet、議長(Synthesizer)をOpusで実行する。コスト管理としてモデル・最大トークン数・実行回数・概算利用料を実行ログに記録する方針を§17 Decisionsへ追加。§16 Open QuestionsからAI実行形態の未決事項を削除。 |
 | 2026-06-10 | 第8版（修正）。リポジトリにClaude Code向けドキュメントを置く方針を明文化。docs/agents.mdはAgent DBと二重管理になるため除外。§14のツリーに CLAUDE.md・docs/sbi_csv_spec.md・docs/agents.md・.claude/commands/ を追加し、§14.1としてCLAUDE.md / docs / prd.snapshot.md の役割分担（仕様の二重管理を避ける）を追記。 |
 | 2026-06-10 | 第9版。§10 Agent Specificationを「Agent DBを参照」形式に就訳。各エージェントの個別定義（§10.1〜10.6）を削除し、Agent DB（§8.6）が正本である旨を明記。実装上の遵守事項（断定禁止・2段階実行・Sonnet/Opus割り当て）は残存。 |
-- [実装ログ]
+| 2026-06-11 | 第10版。AI実行モデル方針をClaude固定からProvider / Model切り替え可能なLLM API構成へ変更。初期候補をGemini APIとし、個別ペルソナは低〜中コスト高性能モデル、議長(Synthesizer)は高品質モデルを使う方針に更新。必要に応じてGemini版 / Claude版などの週次レポートを比較し、品質・安全性・コストで評価することを追記。 |
