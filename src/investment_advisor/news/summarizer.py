@@ -108,7 +108,7 @@ def summarize_news(
             implication=it.get("implication", ""),
             importance=it.get("importance", "低"),
         )
-        for it in data.get("items", [])
+        for it in (data.get("items") or [])
     ]
     return NewsDigest(narrative=data.get("narrative", ""), items=classified)
 

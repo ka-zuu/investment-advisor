@@ -18,7 +18,7 @@ def collect_news(
     """保有銘柄（評価額降順 max_holdings 件）について Google News RSS を検索し NewsItem リストを返す。"""
     search_targets = _build_search_targets(holdings, max_holdings)
     items: list[NewsItem] = []
-    seen: set[str] = set()  # (link, normalized_title) で重複排除
+    seen: set[tuple[str, str]] = set()  # (link, normalized_title) で重複排除
 
     for query_label, query in search_targets:
         try:
@@ -64,9 +64,13 @@ def _build_search_targets(
 
 
 def _fetch_news(query: str, query_label: str, max_articles: int) -> list[NewsItem]:
+    import httpx
     encoded = urllib.parse.quote(query)
     url = f"https://news.google.com/rss/search?q={encoded}&hl=ja&gl=JP&ceid=JP:ja"
-    feed = feedparser.parse(url)
+    with httpx.Client(timeout=10.0) as client:
+        resp = client.get(url)
+        resp.raise_for_status()
+        feed = feedparser.parse(resp.content)
     items: list[NewsItem] = []
     for entry in feed.entries[:max_articles]:
         items.append(NewsItem(

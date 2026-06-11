@@ -57,6 +57,7 @@ def main() -> None:
 
     # Step 9: ニュース収集（P1 — Google News RSS + LLM要約）
     news_digest = None
+    stats_tmp = None
     if holdings:
         adapter = make_adapter()
         stats_tmp = ExecutionStats()
@@ -104,6 +105,8 @@ def main() -> None:
         lookback_ctx=lookback_ctx,
         news_digest=news_digest,
     )
+    if stats_tmp:
+        stats.runs.extend(stats_tmp.runs)
 
     # Step 15-16: レポート本文書き込み
     fill_report_content(
