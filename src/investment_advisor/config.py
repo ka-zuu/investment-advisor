@@ -37,6 +37,11 @@ ANTHROPIC_API_KEY: str = os.environ.get("ANTHROPIC_API_KEY", "")
 MODEL_PERSONA: str = os.environ.get("MODEL_PERSONA", LLM_MODEL_PERSONA)
 MODEL_SYNTHESIZER: str = os.environ.get("MODEL_SYNTHESIZER", LLM_MODEL_SYNTHESIZER)
 
+# --- ニュース設定（P1）---
+LLM_MODEL_NEWS: str = os.environ.get("LLM_MODEL_NEWS", "")  # 空のときは LLM_MODEL_PERSONA を使う
+NEWS_MAX_HOLDINGS: int = int(os.environ.get("NEWS_MAX_HOLDINGS", "10"))
+NEWS_MAX_ARTICLES: int = int(os.environ.get("NEWS_MAX_ARTICLES", "5"))
+
 # --- 実行設定 ---
 TIMEZONE: str = os.environ.get("TIMEZONE", "Asia/Tokyo")
 

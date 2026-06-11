@@ -55,6 +55,27 @@ def load_latest_snapshot_before(client: NotionClient, before_date: date) -> floa
     return (pages[0]["properties"].get("総資産額") or {}).get("number")
 
 
+def load_latest_synth_analysis_before(
+    client: NotionClient,
+    before_date: date,
+) -> dict[str, Any] | None:
+    """Agent Analysis Results DB から指定日より前の議長分析（最新1件）を返す。P1: DB未設定時はNone。"""
+    if not config.NOTION_DB_AGENT_ANALYSIS:
+        return None
+    pages = client.query_database(
+        config.NOTION_DB_AGENT_ANALYSIS,
+        filter={"property": "日付", "date": {"before": before_date.isoformat()}},
+        sorts=[{"property": "日付", "direction": "descending"}],
+    )
+    for page in pages:
+        props = page.get("properties", {})
+        name_parts = (props.get("分析名") or {}).get("title") or []
+        name = "".join(p.get("plain_text", "") for p in name_parts)
+        if "議長" in name or "Synthesizer" in name or "統合" in name:
+            return page
+    return None
+
+
 def load_year_start_snapshot(client: NotionClient, year: int) -> float | None:
     """Portfolio Snapshots DB から指定年の最初のスナップショットの総資産額を返す。P1: DB未設定時はNoneを返す。"""
     if not config.NOTION_DB_PORTFOLIO_SNAPSHOTS:
