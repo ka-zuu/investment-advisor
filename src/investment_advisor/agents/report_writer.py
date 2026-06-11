@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from investment_advisor import config
 from investment_advisor.agents.runner import AgentResult
 from investment_advisor.notion_client import NotionClient
 from investment_advisor.portfolio.models import PortfolioSummary
 from investment_advisor.utils.money import format_jpy, format_pct
+
+if TYPE_CHECKING:
+    from investment_advisor.news.models import NewsDigest
+    from investment_advisor.portfolio.fire import FireGap
 
 
 def create_report_stub(
@@ -42,12 +46,14 @@ def fill_report_content(
     persona_results: list[AgentResult],
     synth_result: AgentResult | None,
     ref_date: date,
+    fire_gap: "FireGap | None" = None,
+    news_digest: "NewsDigest | None" = None,
 ) -> None:
     """レポートページに本文ブロックを追記し、総合評価プロパティを更新する。"""
     overall_rating = synth_result.overall_rating if synth_result else _vote_rating(persona_results)
     client.update_page(report_page_id, {"総合評価": {"select": {"name": overall_rating}}})
 
-    blocks = _build_blocks(summary, persona_results, synth_result, ref_date)
+    blocks = _build_blocks(summary, persona_results, synth_result, ref_date, fire_gap=fire_gap, news_digest=news_digest)
     client.append_block_children(report_page_id, blocks)
     print(f"[report_writer] レポート本文書き込み完了: {ref_date}")
 
@@ -62,12 +68,18 @@ def _build_blocks(
     persona_results: list[AgentResult],
     synth_result: AgentResult | None,
     ref_date: date,
+    fire_gap: "FireGap | None" = None,
+    news_digest: "NewsDigest | None" = None,
 ) -> list[dict[str, Any]]:
     b: list[dict[str, Any]] = []
 
-    # 0. 振り返り（P1 未実装）
+    # 0. 振り返り（答え合わせ）
     b.append(_h2("0. 振り返り（答え合わせ）"))
-    b.append(_para("（P1 未実装）1週間前・1か月前のAgent Analysis Resultsを参照した答え合わせは今後実装予定。"))
+    if synth_result and synth_result.lookback_review:
+        for chunk in _split(synth_result.lookback_review):
+            b.append(_para(chunk))
+    else:
+        b.append(_para("（過去データなし、または初回実行のため対象なし）"))
 
     # 1. 今週の総括
     b.append(_h2("1. 今週の総括"))
@@ -90,11 +102,39 @@ def _build_blocks(
 
     # 3. FIRE目標との差分
     b.append(_h2("3. FIRE目標との差分"))
-    b.append(_para("（投資方針DBの目標値との照合はエージェントセクションの分析を参照）"))
+    if fire_gap:
+        b.append(_bullet(f"現在総資産: {format_jpy(fire_gap.current)}"))
+        if fire_gap.target_assets is not None:
+            b.append(_bullet(f"目標資産額: {format_jpy(fire_gap.target_assets)}"))
+        if fire_gap.progress_pct is not None:
+            b.append(_bullet(f"進捗: {fire_gap.progress_pct:.1f}%"))
+        if fire_gap.gap is not None:
+            b.append(_bullet(f"残り差額: {format_jpy(fire_gap.gap)}"))
+        if fire_gap.target_year is not None:
+            b.append(_bullet(f"FIRE目標年: {fire_gap.target_year}年（残り{fire_gap.years_left}年）"))
+        if fire_gap.required_cagr is not None:
+            b.append(_bullet(f"必要CAGR（入金なし単純複利）: {fire_gap.required_cagr:.2f}%/年"))
+        if fire_gap.annual_contribution is not None:
+            b.append(_bullet(f"年間入金額: {format_jpy(fire_gap.annual_contribution)}"))
+        if fire_gap.contribution_covers_pct is not None:
+            b.append(_bullet(f"入金累計カバー率: {fire_gap.contribution_covers_pct:.1f}%（残り期間×年間入金÷差額）"))
+    else:
+        b.append(_para("（投資方針DBに目標資産額・FIRE目標年・毎月入金額を設定するとここに表示されます）"))
 
-    # 4. 保有銘柄関連ニュース（P1 未実装）
+    # 4. 保有銘柄関連ニュース
     b.append(_h2("4. 保有銘柄関連ニュース"))
-    b.append(_para("（P1 未実装）Google News RSS / TDnet / FREDによる自動収集は今後実装予定。"))
+    if news_digest and (news_digest.narrative or news_digest.items):
+        if news_digest.narrative:
+            for chunk in _split(news_digest.narrative):
+                b.append(_para(chunk))
+        for item in news_digest.items:
+            importance_mark = {"高": "★★★", "中": "★★", "低": "★"}.get(item.importance, "★")
+            b.append(_bullet(
+                f"{importance_mark}【{item.category}】{item.related_holding}: {item.implication}\n"
+                f"  → {item.title}  {item.link}"
+            ))
+    else:
+        b.append(_para("（今週は対象ニュースなし）"))
 
     # 5. エージェント別コメント
     b.append(_h2("5. エージェント別コメント"))
@@ -113,6 +153,10 @@ def _build_blocks(
 
     # 6. 意見の対立（議長）
     b.append(_h2("6. 意見の対立"))
+    if persona_results:
+        scores = [r.score for r in persona_results]
+        spread = max(scores) - min(scores) if scores else 0
+        b.append(_para(f"スコアレンジ: {min(scores)}〜{max(scores)}（差={spread}点）"))
     if synth_result and synth_result.opinion_conflict:
         for chunk in _split(synth_result.opinion_conflict):
             b.append(_para(chunk))

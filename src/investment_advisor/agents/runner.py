@@ -13,6 +13,7 @@ from investment_advisor.notion_client import NotionClient
 from investment_advisor.utils.logging import estimate_cost_usd
 
 if TYPE_CHECKING:
+    from investment_advisor.news.models import NewsDigest
     from investment_advisor.portfolio.models import PortfolioSummary
 
 
@@ -42,6 +43,7 @@ class AgentResult:
     action_immediate: str = ""
     action_consider: str = ""
     action_skip: str = ""
+    lookback_review: str = ""
 
 
 @dataclass
@@ -111,6 +113,22 @@ _SYNTHESIZER_TOOL: dict[str, Any] = {
             },
             "score": {"type": "integer", "minimum": 0, "maximum": 100},
             "summary": {"type": "string", "description": "議長としての全体サマリ（3〜5文）"},
+            "opinion_conflict": {
+                "type": "string",
+                "description": (
+                    "攻める意見・守る意見・判断保留の理由を、どのエージェントがどう評価したか"
+                    "（具体名・総合評価・スコア）を対比して明示する。"
+                    "例：「FIRE達成重視（良好/80）は積極的な積み増しを推奨したのに対し、"
+                    "リスク管理（警戒/40）は下落リスクへの備えを優先すべきと主張」のように具体的に。"
+                ),
+            },
+            "lookback_review": {
+                "type": "string",
+                "description": (
+                    "1週間前・1か月前の自分たちの推奨を振り返り、その後どうなったかを自己採点する。"
+                    "過去データがない場合は「初回のため対象なし」と書く。"
+                ),
+            },
             "weekly_checks": {"type": "string", "description": "今週の確認事項（箇条書き）"},
             "action_immediate": {"type": "string", "description": "すぐやる（箇条書き）"},
             "action_consider": {"type": "string", "description": "検討する（箇条書き）"},
@@ -118,6 +136,7 @@ _SYNTHESIZER_TOOL: dict[str, Any] = {
         },
         "required": [
             "overall_rating", "score", "summary",
+            "opinion_conflict", "lookback_review",
             "weekly_checks", "action_immediate", "action_consider", "action_skip",
         ],
     },
@@ -131,15 +150,17 @@ _SYNTHESIZER_TOOL: dict[str, Any] = {
 
 def run_all_agents(
     client: NotionClient,
-    summary: PortfolioSummary,
+    summary: "PortfolioSummary",
     holdings: list[dict[str, Any]],
     report_page_id: str,
     ref_date: date,
+    lookback_ctx: str = "",
+    news_digest: "NewsDigest | None" = None,
 ) -> tuple[list[AgentResult], AgentResult | None, ExecutionStats]:
     """Step 11-14: ペルソナ4体を実行し、その後議長を実行する。"""
     stats = ExecutionStats()
     policy = _prompts.load_investment_policy(client)
-    portfolio_ctx = _prompts.build_portfolio_context(summary, holdings, policy)
+    portfolio_ctx = _prompts.build_portfolio_context(summary, holdings, policy, news_digest=news_digest)
 
     agents = _load_active_agents(client)
     persona_agents = [a for a in agents if not _is_synthesizer(a)]
@@ -157,7 +178,8 @@ def run_all_agents(
     if synth_agents and persona_results:
         synth_ctx = _prompts.build_synthesizer_context(persona_results)
         synth_result = _run_synthesizer(
-            adapter, client, synth_agents[0], portfolio_ctx, synth_ctx, report_page_id, ref_date, stats
+            adapter, client, synth_agents[0], portfolio_ctx, synth_ctx,
+            lookback_ctx, report_page_id, ref_date, stats,
         )
 
     return persona_results, synth_result, stats
@@ -251,6 +273,7 @@ def _run_synthesizer(
     agent_page: dict[str, Any],
     portfolio_ctx: str,
     synth_ctx: str,
+    lookback_ctx: str,
     report_page_id: str,
     ref_date: date,
     stats: ExecutionStats,
@@ -258,15 +281,22 @@ def _run_synthesizer(
     name = _agent_name(agent_page)
     system = (
         _agent_prompt(agent_page)
-        or "あなたは投資委員会の議長です。4つのエージェントの分析を統合し、今週の確認事項と最終アクション候補を整理してください。投資判断を断定せず、最終判断はユーザーが行う前提で書いてください。"
+        or (
+            "あなたは投資委員会の議長です。4つのエージェントの分析を統合し、"
+            "今週の確認事項と最終アクション候補を整理してください。"
+            "エージェント間の意見の対立を opinion_conflict で具体名・評価・スコアを挙げて明示してください。"
+            "投資判断を断定せず、最終判断はユーザーが行う前提で書いてください。"
+        )
     )
     print(f"[runner] {name}（議長）実行中... (provider={config.LLM_PROVIDER}, model={config.LLM_MODEL_SYNTHESIZER})")
-    user_content = f"{portfolio_ctx}\n\n{synth_ctx}"
+    user_content = portfolio_ctx + "\n\n" + synth_ctx
+    if lookback_ctx:
+        user_content += "\n\n" + lookback_ctx
     try:
         resp: LLMResponse = adapter.complete_with_tool(
-            # 議長は入力・出力とも大きく、思考トークンも含むため余裕を持たせる。
+            # 議長は入力・出力とも大きく、opinion_conflict / lookback_review 追加のため余裕を持たせる。
             model=config.LLM_MODEL_SYNTHESIZER,
-            max_tokens=10000,
+            max_tokens=12000,
             system=system,
             user_content=user_content,
             tool=_SYNTHESIZER_TOOL,
@@ -281,13 +311,14 @@ def _run_synthesizer(
         return None
 
     data = resp.tool_input
+    opinion_conflict = data.get("opinion_conflict", "")
     result = AgentResult(
         agent_name=name,
         agent_page_id=agent_page["id"],
         overall_rating=data.get("overall_rating", "注意"),
         score=int(data.get("score", 50)),
         summary=data.get("summary", ""),
-        detail="",
+        detail=opinion_conflict,  # Agent Analysis Results の詳細分析に意見対立を保存
         actions=data.get("action_immediate", ""),
         follow_up=data.get("weekly_checks", ""),
         is_synthesizer=True,
@@ -295,6 +326,8 @@ def _run_synthesizer(
         output_tokens=resp.output_tokens,
         model=config.LLM_MODEL_SYNTHESIZER,
         provider=config.LLM_PROVIDER,
+        opinion_conflict=opinion_conflict,
+        lookback_review=data.get("lookback_review", ""),
         weekly_checks=data.get("weekly_checks", ""),
         action_immediate=data.get("action_immediate", ""),
         action_consider=data.get("action_consider", ""),
