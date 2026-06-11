@@ -10,7 +10,7 @@ _ENV_PATH = Path(__file__).parent.parent.parent / ".env"
 load_dotenv(_ENV_PATH)
 
 # --- Notion ---
-NOTION_TOKEN: str = os.environ["NOTION_TOKEN"]
+NOTION_TOKEN: str = os.environ.get("NOTION_TOKEN", "")
 NOTION_PRD_PAGE_ID: str = os.environ.get("NOTION_PRD_PAGE_ID", "")
 NOTION_IMPL_LOG_PAGE_ID: str = os.environ.get("NOTION_IMPL_LOG_PAGE_ID", "")
 
