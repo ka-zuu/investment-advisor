@@ -49,7 +49,7 @@ PRD §12 の実行フロー（PRDスナップショット保存 → CSV取り込
 python -m investment_advisor.main
 ```
 
-cron や systemd timer での定期実行には `scripts/run_weekly.sh` を利用できます。
+cron や systemd timer での定期実行には `scripts/run_weekly.sh` を利用できます。このスクリプトは内部でリポジトリルートへ移動（`cd`）し、`.venv` があれば自動でアクティベートするため、cron からは絶対パスで呼び出すだけで動作します。
 
 ```bash
 # cron例: 毎週日曜 8:00 に実行
